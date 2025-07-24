@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인하집 마피아게임</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <div id="login-screen" class="screen active">
+            <div class="login-box">
+                <h1>인하집 마피아게임</h1>
+                <p>당신의 이름을 입력하세요.</p>
+                <input type="text" id="name-input" placeholder="이름" maxlength="10">
+                <button id="join-btn">참가하기</button>
+            </div>
+        </div>
+        <div id="lobby-screen" class="screen">
+            <h2>대기실</h2>
+            <p>참가자를 기다리는 중... (<span id="player-count">0</span>/4)</p>
+            <ul id="player-list"></ul>
+            <div id="start-timer-display" class="hidden"></div>
+        </div>
+        <div id="game-screen" class="screen">
+            <div class="top-bar">
+                <div id="my-info">
+                    <span id="my-name"></span> (<span id="my-role"></span>)
+                </div>
+                <div id="game-timer-display">
+                    다음 투표까지: <span id="game-timer">90</span>초
+                </div>
+            </div>
+            <div class="tabs">
+                <button class="tab-link active" data-tab="ability-tab">능력</button>
+                <button class="tab-link" data-tab="mission-tab">미션</button>
+            </div>
+            <div id="ability-tab" class="tab-content active">
+                <div id="ability-content"></div>
+            </div>
+            <div id="mission-tab" class="tab-content">
+                <ul id="mission-list"></ul>
+            </div>
+        </div>
+    </div>
+    <div id="modal-overlay" class="hidden">
+        <div id="role-modal" class="modal-content hidden">
+            <h2 id="role-name"></h2>
+            <p id="role-description"></p>
+        </div>
+        <div id="quiz-modal" class="modal-content hidden">
+            <h3 id="quiz-title"></h3>
+            <p id="quiz-question"></p>
+            <input type="text" id="quiz-answer-input" placeholder="정답을 입력하세요">
+            <div id="quiz-options"></div>
+            <button id="submit-quiz-btn">제출</button>
+        </div>
+        
+        <div id="vote-modal" class="modal-content hidden">
+            <h3>투표 시간</h3>
+            <p>가장 의심스러운 사람을 지목해주세요.</p>
+            <div id="vote-options"></div>
+            <button id="submit-vote-btn">투표하기</button>
+        </div>
+        <div id="result-modal" class="modal-content hidden">
+            <h2 id="result-title"></h2>
+            <p id="result-message"></p>
+            <button id="restart-btn">로비로 돌아가기</button>
+        </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
