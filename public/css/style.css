@@ -7,11 +7,6 @@
     --danger-color: #c53b50;
     --success-color: #43b581;
 }
-/* [추가] 죽은 플레이어 스타일 */
-.player.dead {
-    color: #888;
-    text-decoration: line-through;
-}
 
 body {
     font-family: 'Noto Sans KR', sans-serif;
@@ -70,8 +65,7 @@ p {
     line-height: 1.6;
 }
 
-/* --- 각 화면별 스타일 --- */
-/* 로그인 화면 */
+/* --- 로그인 화면 --- */
 .login-box {
     width: 100%;
     text-align: center;
@@ -120,33 +114,7 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* 로비 화면 */
-#lobby-screen h2 { margin-top: 20px; }
-
-#player-list {
-    list-style: none;
-    padding: 0;
-    width: 100%;
-    margin-top: 20px;
-}
-
-#player-list li {
-    background-color: #202225;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 8px;
-    text-align: center;
-    font-size: 18px;
-}
-
-#start-timer-display {
-    font-size: 48px;
-    font-weight: 700;
-    margin-top: 30px;
-    color: var(--accent-color);
-}
-
-/* 게임 화면 */
+/* --- 게임 화면 --- */
 .top-bar {
     width: 100%;
     display: flex;
@@ -159,7 +127,8 @@ button:disabled {
 
 #my-info { font-weight: 500; }
 
-#game-timer-display { font-size: 14px; color: var(--danger-color); font-weight: bold; }
+#game-timer-display { font-size: 14px; color: var(--secondary-color); font-weight: bold; }
+#day-night-status { color: var(--primary-color); }
 
 .tabs {
     display: flex;
@@ -185,13 +154,16 @@ button:disabled {
     font-weight: 700;
 }
 
-.tab-content { display: none; width: 100%; overflow-y: auto; height: calc(100% - 150px);}
-
+.tab-content { display: none; width: 100%; overflow-y: auto; flex-grow: 1; }
 .tab-content.active { display: block; }
-
-.tab-content::-webkit-scrollbar { display: none; } /* 스크롤바 숨기기 */
+.tab-content::-webkit-scrollbar { display: none; }
 
 #ability-content { text-align: center; padding: 10px; }
+
+#ability-confirm-btn {
+    margin-top: 20px;
+    width: 100%;
+}
 
 .ability-target-grid {
     display: grid;
@@ -210,12 +182,19 @@ button:disabled {
     background-color: var(--danger-color);
     box-shadow: 0 0 10px var(--danger-color);
 }
+.target-btn:disabled {
+    background-color: #202225;
+    color: #6a6a6a;
+    cursor: not-allowed;
+}
 
+/* 미션 탭 */
 #mission-list {
     list-style: none;
     padding: 0;
     width: 100%;
 }
+#mission-success-rate { color: var(--success-color); font-weight: bold; }
 
 .mission-item {
     display: flex;
@@ -230,14 +209,37 @@ button:disabled {
 }
 
 .mission-item:hover { background-color: #36393f; }
-
 .mission-item.disabled { cursor: not-allowed; background-color: #2a2a2d; color: #6a6a6a; }
-
 .mission-status { font-weight: bold; }
-
 .mission-status.success { color: var(--success-color); }
-
 .mission-status.failure { color: var(--danger-color); }
+
+/* 상황판 탭 */
+#status-board {
+    list-style: none;
+    padding: 0;
+}
+.status-item {
+    background-color: #202225;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    font-size: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.status-item.dead {
+    text-decoration: line-through;
+    color: var(--secondary-color);
+    background-color: #2a2a2d;
+}
+.revealed-role {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
 
 /* --- 모달 --- */
 .hidden { display: none !important; }
@@ -273,13 +275,8 @@ button:disabled {
 }
 
 #role-name { color: var(--accent-color); font-size: 28px; }
-
 #quiz-options { margin: 15px 0; }
-
 .quiz-option-btn { display: block; width: 100%; margin: 8px 0; background-color: #36393f; }
-
 #vote-options { margin: 20px 0; }
-
 .vote-option-btn { display: block; width: 100%; margin: 8px 0; background-color: #36393f; }
-
 .vote-option-btn.selected { background-color: var(--accent-color); }
