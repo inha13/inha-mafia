@@ -7,7 +7,7 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-app.use(express.static(__dirname));
+app.use(express.static(__dirname + '/public'));
 
 let players = {}; // 플레이어와 봇 정보
 let gameState = {}; // 게임 전체 상태
