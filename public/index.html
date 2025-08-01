@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>인하집 마피아게임 (봇 모드)</title>
+    <title>인하집 마피아게임 (7인 모드)</title>
     <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
@@ -12,10 +12,17 @@
         <div id="login-screen" class="screen active">
             <div class="login-box">
                 <h1>인하집 마피아게임</h1>
-                <p>당신의 이름을 입력하면<br>봇 3명과 함께 게임이 시작됩니다.</p>
+                <p>당신의 이름을 입력하세요.<br>4명이 모이면 봇 3명과 함께<br>총 7인 게임이 시작됩니다.</p>
                 <input type="text" id="name-input" placeholder="이름" maxlength="10">
                 <button id="join-btn">참가하기</button>
             </div>
+        </div>
+
+        <div id="lobby-screen" class="screen">
+            <h2>대기실</h2>
+            <p>참가자를 기다리는 중... (<span id="player-count">0</span>/7)</p>
+            <ul id="player-list"></ul>
+            <div id="start-timer-display" class="hidden"></div>
         </div>
 
         <div id="game-screen" class="screen">
@@ -36,13 +43,10 @@
             <div id="status-tab" class="tab-content active">
                 <ul id="status-board"></ul>
             </div>
-
             <div id="ability-tab" class="tab-content">
-                <div id="ability-content">
-                    </div>
+                <div id="ability-content"></div>
                 <button id="ability-confirm-btn" class="hidden">확인</button>
             </div>
-
             <div id="mission-tab" class="tab-content">
                 <p>미션 성공률: <span id="mission-success-rate">0</span>%</p>
                 <ul id="mission-list"></ul>
