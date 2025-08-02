@@ -12,6 +12,16 @@ app.use(express.static(__dirname + '/public'));
 let players = {}; 
 let gameState = {}; 
 
+// --- 서버 시작 시 봇 3명 미리 생성 ---
+function initializeBots() {
+    players = {}; // 플레이어 목록 초기화
+    for (let i = 1; i <= 3; i++) {
+        const botId = `bot_${i}`;
+        players[botId] = { id: botId, name: `봇${i}`, isBot: true, alive: true, role: null };
+    }
+    console.log("Initialized with 3 bots.");
+}
+
 const ALL_MISSIONS = [
     { id: 1, question: "화장실 2번째 칸에 수건은 몇 개 있을까요?", type: "number", answer: "5" },
     { id: 2, question: "뒷 화장실에 휴지는 있을까요?", type: "ox", answer: "O" },
@@ -47,18 +57,19 @@ function resetGame() {
         missionSuccessRate: 0,
         mafiaAbilityBlocked: false,
         nightActions: {
-            mafia: [], // 여러 마피아의 행동을 저장
+            mafia: [], 
             police: { target: null, executor: null },
             chatterbox: { target: null, executor: null }
         },
         revealedRoles: {},
         chatterboxUsed: false,
     };
+    // 봇을 포함한 모든 플레이어 상태 초기화
     Object.values(players).forEach(p => {
         p.alive = true;
         p.votedFor = null;
     });
-    console.log("--- Game Reset ---");
+    console.log("--- Game State Reset ---");
 }
 
 function broadcastGameState() {
@@ -76,7 +87,6 @@ function startGame() {
     gameState.isStarted = true;
     
     const playerIds = Object.keys(players);
-    // 7인 기준 역할 분배
     let roles = ['마피아', '마피아', '경찰', '수다쟁이', '시민', '시민', '시민'];
     roles = roles.sort(() => Math.random() - 0.5);
 
@@ -108,6 +118,8 @@ function startNewDay() {
     broadcastGameState();
     setPhaseTimer(90, startNightPhase);
 }
+
+// (이하 startNightPhase, processNightActions 등 게임 로직 함수는 이전과 동일)
 
 function startNightPhase() {
     gameState.phase = 'night';
@@ -142,9 +154,8 @@ function processNightActions() {
         }
     }
 
-    // 여러 마피아의 타겟을 통합
     const mafiaTargets = mafia.map(action => action.target);
-    const finalMafiaTarget = mafiaTargets.length > 0 ? mafiaTargets[0] : null; // 간단하게 첫 번째 마피아의 선택을 따름
+    const finalMafiaTarget = mafiaTargets.length > 0 ? mafiaTargets[0] : null;
 
     if (finalMafiaTarget) {
         const mafiaExecutor = mafia[0].executor;
@@ -288,6 +299,8 @@ function checkWinCondition() {
     if (winner) {
         io.emit('gameOver', { winner, message });
         resetGame();
+        // 게임 종료 후 봇을 다시 초기화
+        initializeBots();
         return true;
     }
     return false;
@@ -322,7 +335,12 @@ function handleVote({voterId, targetId}) {
     }
 }
 
+// --- 연결 및 로그인 로직 수정 ---
 io.on('connection', (socket) => {
+    // 새로운 클라이언트에게 현재 대기실 정보 전송
+    const currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
+    socket.emit('lobbyUpdate', currentPlayers);
+
     socket.on('login', (name) => {
         const humanPlayers = Object.values(players).filter(p => !p.isBot);
         if (humanPlayers.length >= 4) {
@@ -332,33 +350,26 @@ io.on('connection', (socket) => {
             return socket.emit('loginError', '이미 사용 중인 이름입니다.');
         }
 
-        players[socket.id] = { id: socket.id, name, isBot: false, socket };
+        players[socket.id] = { id: socket.id, name, isBot: false, alive: true, role: null, socket };
         socket.emit('loginSuccess');
         
-        let currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
-        io.emit('lobbyUpdate', currentPlayers);
+        // 모든 클라이언트에게 대기실 정보 업데이트
+        const updatedPlayers = Object.values(players).map(({socket, ...rest}) => rest);
+        io.emit('lobbyUpdate', updatedPlayers);
 
-        // 4명의 인간 플레이어가 모이면 봇 추가 후 게임 시작
-        if (Object.values(players).filter(p => !p.isBot).length === 4) {
-             // 봇 3명 추가
-            for (let i = 1; i <= 3; i++) {
-                const botId = `bot_${i}`;
-                players[botId] = { id: botId, name: `봇${i}`, isBot: true };
-            }
-            // 최종 플레이어 목록 다시 전송
-            currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
-            io.emit('lobbyUpdate', currentPlayers);
-
-            console.log(`4 human players ready. Adding 3 bots. Starting game in 5 seconds.`);
+        // 총 7명이 되면 게임 시작
+        if (Object.keys(players).length === 7) {
+            console.log(`7 players ready. Starting game in 5 seconds.`);
+            io.emit('gameStartingCountdown');
             setTimeout(startGame, 5000);
         }
     });
 
+    // (abilityAction, submitVote, submitQuiz 핸들러는 이전과 동일)
     socket.on('abilityAction', ({ ability, targetId }) => {
         const player = players[socket.id];
         if (player && player.alive && player.role.toLowerCase() === ability) {
             if(ability === 'mafia') {
-                // 기존 선택 제거 후 새로 추가
                 gameState.nightActions.mafia = gameState.nightActions.mafia.filter(a => a.executor !== socket.id);
                 gameState.nightActions.mafia.push({ target: targetId, executor: socket.id });
             } else {
@@ -380,15 +391,16 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        if (players[socket.id]) {
-            console.log(`Player ${players[socket.id].name} disconnected. Resetting game.`);
-            // 게임 진행 중이었다면 게임 전체 리셋
-            if(gameState.isStarted) {
-                players = {};
-                resetGame();
+        const disconnectedPlayer = players[socket.id];
+        if (disconnectedPlayer) {
+            console.log(`Player ${disconnectedPlayer.name} disconnected.`);
+            // 게임이 시작된 후라면, 게임 전체 리셋
+            if (gameState.isStarted) {
                 io.emit('gameReset');
+                resetGame();
+                initializeBots();
             } else {
-                // 대기실이었다면 해당 플레이어만 제거
+            // 대기실 상태였다면 해당 플레이어만 제거하고 목록 업데이트
                 delete players[socket.id];
                 const currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
                 io.emit('lobbyUpdate', currentPlayers);
@@ -397,4 +409,8 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// 서버 시작!
+server.listen(PORT, () => {
+    initializeBots();
+    console.log(`Server running on port ${PORT}`);
+});

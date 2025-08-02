@@ -1,9 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const socket = io();
 
-    // 화면 및 UI 요소
+    // (상단 UI 요소 선언부는 기존과 동일)
     const screens = {
         login: document.getElementById('login-screen'),
+        lobby: document.getElementById('lobby-screen'),
         game: document.getElementById('game-screen'),
     };
     const modalOverlay = document.getElementById('modal-overlay');
@@ -15,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const joinBtn = document.getElementById('join-btn');
     const nameInput = document.getElementById('name-input');
+    
+    const playerCountSpan = document.getElementById('player-count');
+    const playerListUl = document.getElementById('player-list');
+    const startTimerDisplay = document.getElementById('start-timer-display');
+
     const myNameSpan = document.getElementById('my-name');
     const myRoleSpan = document.getElementById('my-role');
     const dayNightStatusSpan = document.getElementById('day-night-status');
@@ -41,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const hideModals = () => modalOverlay.classList.add('hidden');
 
+    // (이하 updateGameUI, updateStatusBoard 등 대부분의 함수는 기존과 동일)
     // --- 탭 전환 ---
     document.querySelector('.tabs').addEventListener('click', (e) => {
         if (e.target.classList.contains('tab-link')) {
@@ -51,11 +58,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- UI 업데이트 함수 ---
-    function updateUI() {
+    function updateLobbyUI(players) {
+        playerCountSpan.textContent = players.length;
+        playerListUl.innerHTML = players.map(p => `<li>${p.name}</li>`).join('');
+    }
+
+    function updateGameUI() {
         if (!gameState.isStarted) return;
         
         myPlayer = gameState.players.find(p => p.id === socket.id);
         if (!myPlayer) return;
+
+        if (screens.game.classList.contains('active') === false) {
+            showScreen('game');
+        }
 
         myNameSpan.textContent = myPlayer.name;
         myRoleSpan.textContent = myPlayer.role;
@@ -64,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMissionTab();
         updateAbilityTab();
 
-        // 투표 모달 업데이트
         if (gameState.phase === 'vote' && myPlayer.alive) {
             updateVoteModal();
             showModal('vote');
@@ -127,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedTargetId = null;
 
         const canUseAbility = myPlayer.alive && gameState.phase === 'night';
-        const abilityRole = myPlayer.role.toLowerCase();
+        const abilityRole = myPlayer.role ? myPlayer.role.toLowerCase() : '';
 
         let description = '사용할 수 있는 능력이 없습니다.';
         let targets = [];
@@ -139,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         description = '미션 성공률이 높아 능력을 사용할 수 없습니다.';
                     } else {
                         description = '밤에 제거할 대상을 선택하세요.';
-                        targets = gameState.players.filter(p => p.alive && p.id !== myPlayer.id);
+                        targets = gameState.players.filter(p => p.alive && !p.role.includes('마피아'));
                     }
                     break;
                 case '경찰':
@@ -237,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = nameInput.value.trim();
         if (name) {
             joinBtn.disabled = true;
-            joinBtn.textContent = '입장 중...';
+            joinBtn.textContent = '참가 중...';
             socket.emit('login', name);
         }
     });
@@ -262,16 +277,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 소켓 이벤트 핸들러 ---
-    socket.on('loginSuccess', () => showScreen('game'));
+    socket.on('loginSuccess', () => showScreen('lobby'));
     socket.on('loginError', (msg) => {
         alert(msg);
         joinBtn.disabled = false;
         joinBtn.textContent = '참가하기';
     });
 
+    socket.on('lobbyUpdate', (players) => {
+        updateLobbyUI(players);
+    });
+
+    socket.on('gameStartingCountdown', () => {
+        startTimerDisplay.classList.remove('hidden');
+        let count = 5;
+        startTimerDisplay.textContent = `게임이 ${count}초 후에 시작됩니다`;
+        const interval = setInterval(() => {
+            count--;
+            if (count > 0) {
+                startTimerDisplay.textContent = `게임이 ${count}초 후에 시작됩니다`;
+            } else {
+                startTimerDisplay.textContent = '게임 시작!';
+                clearInterval(interval);
+            }
+        }, 1000);
+    });
+
     socket.on('gameStateUpdate', (newGameState) => {
         gameState = newGameState;
-        updateUI();
+        updateGameUI();
     });
 
     socket.on('roleInfo', ({ role }) => {
