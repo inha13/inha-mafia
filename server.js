@@ -12,9 +12,8 @@ app.use(express.static(__dirname + '/public'));
 let players = {}; 
 let gameState = {}; 
 
-// --- 서버 시작 시 봇 3명 미리 생성 ---
 function initializeBots() {
-    players = {}; // 플레이어 목록 초기화
+    players = {}; 
     for (let i = 1; i <= 3; i++) {
         const botId = `bot_${i}`;
         players[botId] = { id: botId, name: `봇${i}`, isBot: true, alive: true, role: null };
@@ -47,11 +46,15 @@ const ALL_MISSIONS = [
 
 function resetGame() {
     clearTimeout(gameState.timer);
+    clearInterval(gameState.interval);
+    clearInterval(gameState.botQuizInterval);
     gameState = {
         isStarted: false,
         phase: 'ended', 
         day: 0,
         timer: null,
+        interval: null,
+        botQuizInterval: null,
         roles: {},
         missions: [],
         missionSuccessRate: 0,
@@ -64,7 +67,6 @@ function resetGame() {
         revealedRoles: {},
         chatterboxUsed: false,
     };
-    // 봇을 포함한 모든 플레이어 상태 초기화
     Object.values(players).forEach(p => {
         p.alive = true;
         p.votedFor = null;
@@ -75,6 +77,9 @@ function resetGame() {
 function broadcastGameState() {
     const publicGameState = {
         ...gameState,
+        timer: null,
+        interval: null,
+        botQuizInterval: null,
         roles: {}, 
         missions: gameState.missions?.map(({ answer, ...rest }) => rest),
         players: Object.values(players).map(({ socket, ...rest }) => rest)
@@ -107,30 +112,27 @@ function startGame() {
 function startNewDay() {
     gameState.day++;
     gameState.phase = 'day';
+    
+    clearInterval(gameState.botQuizInterval); // 이전 인터벌 제거
+    gameState.botQuizInterval = setInterval(handleBotQuizCycle, 10000); // 10초마다 봇 퀴즈 실행
 
     const shuffledMissions = ALL_MISSIONS.sort(() => Math.random() - 0.5);
     gameState.missions = shuffledMissions.slice(0, 7).map(m => ({ ...m, status: 'pending' }));
     
-    Object.values(players).filter(p => p.isBot).forEach(bot => {
-        setTimeout(() => handleBotQuiz(bot.id), Math.random() * 10000);
-    });
-
-    broadcastGameState();
     setPhaseTimer(90, startNightPhase);
+    broadcastGameState();
 }
-
-// (이하 startNightPhase, processNightActions 등 게임 로직 함수는 이전과 동일)
 
 function startNightPhase() {
     gameState.phase = 'night';
+    clearInterval(gameState.botQuizInterval); // 낮 동안의 봇 퀴즈 인터벌 중지
+    
     const totalMissions = gameState.missions.length;
     const successMissions = gameState.missions.filter(m => m.status === 'success').length;
     gameState.missionSuccessRate = totalMissions > 0 ? (successMissions / totalMissions) * 100 : 0;
     gameState.mafiaAbilityBlocked = gameState.missionSuccessRate >= 90;
     
     gameState.nightActions = { mafia: [], police: {}, chatterbox: {} };
-
-    broadcastGameState();
 
     Object.values(players).forEach(player => {
         if(player.isBot && player.alive) {
@@ -139,6 +141,7 @@ function startNightPhase() {
     });
 
     setPhaseTimer(30, processNightActions);
+    broadcastGameState();
 }
 
 function processNightActions() {
@@ -187,8 +190,7 @@ function processNightActions() {
 function startVotePhase() {
     gameState.phase = 'vote';
     Object.values(players).forEach(p => p.votedFor = null);
-    broadcastGameState();
-
+    
     Object.values(players).filter(p => p.isBot && p.alive).forEach(bot => {
         setTimeout(() => {
             const alivePlayers = Object.values(players).filter(p => p.alive && p.id !== bot.id);
@@ -200,6 +202,7 @@ function startVotePhase() {
     });
 
     setPhaseTimer(30, processVote);
+    broadcastGameState();
 }
 
 
@@ -267,16 +270,21 @@ function handleBotAbility(botId) {
     }
 }
 
-function handleBotQuiz(botId) {
-    if(!gameState.isStarted) return;
-    const mission = gameState.missions.find(m => m.status === 'pending');
-    if(!mission) return;
+// 10초마다 봇 중 하나가 퀴즈를 푸는 로직
+function handleBotQuizCycle() {
+    if (!gameState.isStarted || gameState.phase !== 'day') return;
+
+    const pendingMission = gameState.missions.find(m => m.status === 'pending');
+    if (!pendingMission) return; // 풀 미션이 없음
+
+    const solvingBot = Object.values(players).find(p => p.isBot && p.alive);
+    if (!solvingBot) return; // 퀴즈를 풀 봇이 없음
 
     const isCorrect = Math.random() < 2 / 3; 
-    mission.status = isCorrect ? 'success' : 'failure';
+    pendingMission.status = isCorrect ? 'success' : 'failure';
+    console.log(`Bot ${solvingBot.name} solved mission #${pendingMission.id} -> ${pendingMission.status}`);
     broadcastGameState();
 }
-
 
 function checkWinCondition() {
     const alivePlayers = Object.values(players).filter(p => p.alive);
@@ -299,28 +307,31 @@ function checkWinCondition() {
     if (winner) {
         io.emit('gameOver', { winner, message });
         resetGame();
-        // 게임 종료 후 봇을 다시 초기화
         initializeBots();
         return true;
     }
     return false;
 }
 
+// 안정적인 타이머 로직으로 수정
 function setPhaseTimer(duration, callback) {
     clearTimeout(gameState.timer);
-    let timeLeft = duration;
+    clearInterval(gameState.interval);
 
-    function tick() {
-        io.emit('timerUpdate', { timeLeft, phase: gameState.phase });
+    let timeLeft = duration;
+    io.emit('timerUpdate', { timeLeft, phase: gameState.phase });
+
+    gameState.interval = setInterval(() => {
         timeLeft--;
-        if (timeLeft >= 0) {
-            gameState.timer = setTimeout(tick, 1000);
-        } else {
-            callback();
+        io.emit('timerUpdate', { timeLeft, phase: gameState.phase });
+        if (timeLeft <= 0) {
+            clearInterval(gameState.interval);
         }
-    }
-    tick();
+    }, 1000);
+
+    gameState.timer = setTimeout(callback, duration * 1000);
 }
+
 
 function handleVote({voterId, targetId}) {
     const voter = players[voterId];
@@ -330,14 +341,13 @@ function handleVote({voterId, targetId}) {
         const allVoted = alivePlayers.every(p => p.votedFor !== null);
         if (allVoted) {
             clearTimeout(gameState.timer);
+            clearInterval(gameState.interval);
             processVote();
         }
     }
 }
 
-// --- 연결 및 로그인 로직 수정 ---
 io.on('connection', (socket) => {
-    // 새로운 클라이언트에게 현재 대기실 정보 전송
     const currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
     socket.emit('lobbyUpdate', currentPlayers);
 
@@ -353,11 +363,9 @@ io.on('connection', (socket) => {
         players[socket.id] = { id: socket.id, name, isBot: false, alive: true, role: null, socket };
         socket.emit('loginSuccess');
         
-        // 모든 클라이언트에게 대기실 정보 업데이트
         const updatedPlayers = Object.values(players).map(({socket, ...rest}) => rest);
         io.emit('lobbyUpdate', updatedPlayers);
 
-        // 총 7명이 되면 게임 시작
         if (Object.keys(players).length === 7) {
             console.log(`7 players ready. Starting game in 5 seconds.`);
             io.emit('gameStartingCountdown');
@@ -365,7 +373,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // (abilityAction, submitVote, submitQuiz 핸들러는 이전과 동일)
     socket.on('abilityAction', ({ ability, targetId }) => {
         const player = players[socket.id];
         if (player && player.alive && player.role.toLowerCase() === ability) {
@@ -394,13 +401,11 @@ io.on('connection', (socket) => {
         const disconnectedPlayer = players[socket.id];
         if (disconnectedPlayer) {
             console.log(`Player ${disconnectedPlayer.name} disconnected.`);
-            // 게임이 시작된 후라면, 게임 전체 리셋
             if (gameState.isStarted) {
                 io.emit('gameReset');
                 resetGame();
                 initializeBots();
             } else {
-            // 대기실 상태였다면 해당 플레이어만 제거하고 목록 업데이트
                 delete players[socket.id];
                 const currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
                 io.emit('lobbyUpdate', currentPlayers);
@@ -409,7 +414,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// 서버 시작!
 server.listen(PORT, () => {
     initializeBots();
     console.log(`Server running on port ${PORT}`);
