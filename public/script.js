@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const myNameSpan = document.getElementById('my-name');
     const myRoleSpan = document.getElementById('my-role');
-    const dayNightStatusSpan = document.getElementById('day-night-status');
     const gameTimerSpan = document.getElementById('game-timer');
     const statusBoardUl = document.getElementById('status-board');
     const abilityContentDiv = document.getElementById('ability-content');
@@ -74,15 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatusBoard();
         updateMissionTab();
         updateAbilityTab();
-
-        if (gameState.phase === 'vote' && myPlayer.alive) {
-            updateVoteModal();
-            showModal('vote');
-        } else {
-            if(modals.vote.classList.contains('hidden') === false) {
-                hideModals();
-            }
-        }
     }
 
     function updateStatusBoard() {
@@ -90,11 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.players.forEach(player => {
             const li = document.createElement('li');
             li.className = `status-item ${!player.alive ? 'dead' : ''}`;
-            
             const icon = document.createElement('i');
             icon.className = `player-icon fas ${player.isBot ? 'fa-robot' : 'fa-user'}`;
             li.appendChild(icon);
-
             const nameSpan = document.createElement('span');
             nameSpan.className = 'player-name';
             nameSpan.textContent = player.name;
@@ -119,24 +107,35 @@ document.addEventListener('DOMContentLoaded', () => {
             li.dataset.missionId = mission.id;
             
             const title = document.createElement('span');
-            title.textContent = `미션 #${mission.id}`;
+            title.textContent = mission.question;
             li.appendChild(title);
+            
+            const statusWrapper = document.createElement('div');
+            statusWrapper.className = 'mission-status-wrapper';
             
             const statusSpan = document.createElement('span');
             statusSpan.className = 'mission-status';
+
             if (mission.status !== 'pending') {
                 li.classList.add('disabled');
                 statusSpan.textContent = mission.status === 'success' ? '성공' : '실패';
                 statusSpan.classList.add(mission.status);
+                statusWrapper.appendChild(statusSpan);
+
+                if(mission.solver) {
+                    const solverSpan = document.createElement('div');
+                    solverSpan.className = 'mission-solver';
+                    solverSpan.textContent = `by ${mission.solver}`;
+                    statusWrapper.appendChild(solverSpan);
+                }
             } else {
                 li.onclick = () => openQuizModal(mission);
             }
-            li.appendChild(statusSpan);
+            li.appendChild(statusWrapper);
             missionListUl.appendChild(li);
         });
     }
 
-    // 능력 탭 업데이트 로직 수정
     function updateAbilityTab() {
         abilityContentDiv.innerHTML = '';
         abilityConfirmBtn.classList.add('hidden');
@@ -144,21 +143,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!myPlayer || !myPlayer.role) return;
 
-        const canUseAbility = myPlayer.alive && gameState.phase === 'night';
+        const canUseAbility = myPlayer.alive; // 언제든 사용 가능
         const abilityRole = myPlayer.role.toLowerCase();
-
         let description = '사용할 수 있는 능력이 없습니다.';
         let targets = [];
 
         if(canUseAbility) {
             switch(abilityRole) {
                 case '마피아':
-                    if (gameState.mafiaAbilityBlocked) {
-                        description = '미션 성공률이 높아 능력을 사용할 수 없습니다.';
+                    if (gameState.missionSuccessRate >= 90) {
+                        description = '미션 성공률이 90% 이상이라 능력을 사용할 수 없습니다.';
                     } else {
-                        description = '밤에 제거할 대상을 선택하세요.';
-                        // 마피아는 자신을 제외한 모든 생존자를 타겟으로 표시
-                        // 서버에서 같은 마피아를 쏘는 것을 방지
+                        description = '제거할 대상을 선택하세요. 선택은 투표가 끝날 때까지 유효합니다.';
                         targets = gameState.players.filter(p => p.alive && p.id !== myPlayer.id);
                     }
                     break;
@@ -205,7 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateVoteModal() {
         const voteOptionsDiv = document.getElementById('vote-options');
+        const submitBtn = document.getElementById('submit-vote-btn');
         voteOptionsDiv.innerHTML = '';
+        submitBtn.disabled = false;
+        submitBtn.textContent = '투표하기';
+
         const alivePlayers = gameState.players.filter(p => p.alive);
 
         alivePlayers.forEach(player => {
@@ -216,10 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.onclick = () => {
                 document.querySelectorAll('.vote-option-btn').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
-                document.getElementById('submit-vote-btn').dataset.targetId = player.id;
+                submitBtn.dataset.targetId = player.id;
             };
             voteOptionsDiv.appendChild(btn);
         });
+        showModal('vote');
     }
 
     function openQuizModal(mission) {
@@ -255,8 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     joinBtn.addEventListener('click', () => {
         const name = nameInput.value.trim();
         if (name) {
-            joinBtn.disabled = true;
-            joinBtn.textContent = '참가 중...';
+            joinBtn.disabled = true; joinBtn.textContent = '참가 중...';
             socket.emit('login', name);
         }
     });
@@ -267,8 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ability: myPlayer.role.toLowerCase(),
                 targetId: selectedTargetId
             });
-            abilityContentDiv.innerHTML = '<p>능력 사용을 완료했습니다.</p>';
-            abilityConfirmBtn.classList.add('hidden');
+            abilityContentDiv.querySelector('p').textContent = `${players.find(p=>p.id === selectedTargetId).name}님을 선택했습니다.`;
         }
     });
 
@@ -276,20 +275,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetId = e.target.dataset.targetId;
         if (targetId) {
             socket.emit('submitVote', targetId);
-            hideModals();
+            e.target.disabled = true;
+            e.target.textContent = "투표 완료";
         }
     });
 
     socket.on('loginSuccess', () => showScreen('lobby'));
     socket.on('loginError', (msg) => {
         alert(msg);
-        joinBtn.disabled = false;
-        joinBtn.textContent = '참가하기';
+        joinBtn.disabled = false; joinBtn.textContent = '참가하기';
     });
 
-    socket.on('lobbyUpdate', (players) => {
-        updateLobbyUI(players);
-    });
+    socket.on('lobbyUpdate', (players) => updateLobbyUI(players));
 
     socket.on('gameStartingCountdown', () => {
         startTimerDisplay.classList.remove('hidden');
@@ -316,8 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
         myRoleSpan.textContent = role;
         
         const roleDesc = {
-            '마피아': '매일 밤 한 명을 암살할 수 있습니다. 시민 팀과 수가 같아지면 승리합니다.',
-            '경찰': '매일 밤 한 명을 지목해 능력을 사용하지 못하게 합니다.',
+            '마피아': '매 라운드 한 명을 암살할 수 있습니다. 시민 팀과 수가 같아지면 승리합니다.',
+            '경찰': '매 라운드 한 명을 지목해 마피아의 암살을 막을 수 있습니다.',
             '수다쟁이': '게임당 한 번, 한 명의 직업을 모두에게 공개할 수 있습니다.',
             '시민': '특별한 능력은 없지만, 투표를 통해 마피아를 찾아내야 합니다.'
         };
@@ -327,22 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(hideModals, 4000);
     });
 
-    socket.on('timerUpdate', ({ timeLeft, phase }) => {
-        const phaseKorean = { 'day': '낮', 'night': '밤', 'vote': '투표' };
-        dayNightStatusSpan.textContent = phaseKorean[phase] || '';
-        gameTimerSpan.textContent = timeLeft;
+    socket.on('timerUpdate', ({ timeLeft }) => gameTimerSpan.textContent = timeLeft);
+    socket.on('voteStart', () => updateVoteModal());
+    socket.on('roundResult', ({ events }) => {
+        hideModals();
+        alert('라운드 결과\n\n' + events.join('\n'));
     });
-
-
-
-    socket.on('nightResult', ({ events }) => {
-        alert('밤이 지났습니다.\n\n' + events.join('\n'));
-    });
-
-    socket.on('voteResult', ({ message }) => {
-        alert(message);
-    });
-
     socket.on('gameOver', ({ winner, message }) => {
         hideModals();
         document.getElementById('result-title').textContent = `${winner} 팀 승리!`;
@@ -350,7 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('restart-btn').onclick = () => window.location.reload();
         showModal('result');
     });
-
     socket.on('gameReset', () => {
         alert("플레이어의 연결이 끊겨 게임이 초기화됩니다.");
         window.location.reload();

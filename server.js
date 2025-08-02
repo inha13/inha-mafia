@@ -7,6 +7,8 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
+const ROUND_DURATION = 120; // 라운드 시간 (초)
+
 app.use(express.static(__dirname + '/public'));
 
 let players = {}; 
@@ -21,7 +23,6 @@ function initializeBots() {
     console.log("Initialized with 3 bots.");
 }
 
-// 퀴즈 30개로 확장
 const ALL_MISSIONS = [
     { id: 1, question: "거실에 있는 스피커의 브랜드는 무엇일까요?", type: "choice", options: ["Marshall", "JBL", "Bose"], answer: "Marshall" },
     { id: 2, question: "현관문 비밀번호에 숫자 0은 포함될까요?", type: "ox", answer: "X" },
@@ -60,14 +61,13 @@ function resetGame() {
     clearInterval(gameState.interval);
     clearInterval(gameState.botQuizInterval);
     gameState = {
-        isStarted: false, phase: 'ended', day: 0, timer: null, interval: null, botQuizInterval: null,
-        roles: {}, missions: [], missionSuccessRate: 0, mafiaAbilityBlocked: false,
-        nightActions: { mafia: [], police: { target: null, executor: null }, chatterbox: { target: null, executor: null } },
+        isStarted: false, round: 0, timer: null, interval: null, botQuizInterval: null,
+        roles: {}, missions: [], missionSuccessRate: 0,
+        abilityActions: { mafia: null, police: null, chatterbox: null },
         revealedRoles: {}, chatterboxUsed: false,
     };
     Object.values(players).forEach(p => {
-        p.alive = true;
-        p.votedFor = null;
+        p.alive = true; p.votedFor = null;
     });
     console.log("--- Game State Reset ---");
 }
@@ -80,14 +80,10 @@ function calculateMissionSuccessRate() {
 }
 
 function broadcastGameState() {
-    // 퀴즈 성공률 실시간 계산
     gameState.missionSuccessRate = calculateMissionSuccessRate();
-    
     const publicGameState = {
-        isStarted: gameState.isStarted, phase: gameState.phase, day: gameState.day, 
-        missions: gameState.missions?.map(({ answer, ...rest }) => rest),
-        missionSuccessRate: gameState.missionSuccessRate,
-        mafiaAbilityBlocked: gameState.mafiaAbilityBlocked,
+        isStarted: gameState.isStarted, round: gameState.round,
+        missions: gameState.missions, missionSuccessRate: gameState.missionSuccessRate,
         revealedRoles: gameState.revealedRoles, chatterboxUsed: gameState.chatterboxUsed,
         players: Object.values(players).map(({ socket, ...rest }) => rest)
     };
@@ -97,9 +93,10 @@ function broadcastGameState() {
 function startGame() {
     resetGame();
     gameState.isStarted = true;
+    gameState.missions = ALL_MISSIONS.map(m => ({ ...m, status: 'pending', solver: null }));
     
     const playerIds = Object.keys(players);
-    let roles = ['마피아', '마피아', '경찰', '수다쟁이', '시민', '시민', '시민'];
+    let roles = ['마피아', '경찰', '수다쟁이', '시민', '시민', '시민', '시민'];
     roles = roles.sort(() => Math.random() - 0.5);
 
     playerIds.forEach((id, index) => {
@@ -113,89 +110,25 @@ function startGame() {
         }
     });
 
-    startNewDay();
+    startNewRound();
 }
 
-function startNewDay() {
-    gameState.day++;
-    gameState.phase = 'day';
-    
+function startNewRound() {
+    gameState.round++;
+    gameState.abilityActions = { mafia: null, police: null, chatterbox: null };
+    Object.values(players).forEach(p => p.votedFor = null);
+
     clearInterval(gameState.botQuizInterval);
     gameState.botQuizInterval = setInterval(handleBotQuizCycle, 10000);
 
-    const shuffledMissions = ALL_MISSIONS.sort(() => Math.random() - 0.5);
-    gameState.missions = shuffledMissions.slice(0, 7).map(m => ({ ...m, status: 'pending' }));
-    
-    setPhaseTimer(90, startNightPhase);
+    setRoundTimer(ROUND_DURATION, startVotePhase);
     broadcastGameState();
 }
-
-function startNightPhase() {
-    gameState.phase = 'night';
-    clearInterval(gameState.botQuizInterval); 
-    
-    gameState.mafiaAbilityBlocked = gameState.missionSuccessRate >= 90;
-    
-    gameState.nightActions = { mafia: [], police: {}, chatterbox: {} };
-
-    Object.values(players).forEach(player => {
-        if(player.isBot && player.alive) {
-            handleBotAbility(player.id);
-        }
-    });
-
-    setPhaseTimer(30, processNightActions);
-    broadcastGameState();
-}
-
-function processNightActions() {
-    const { mafia, police, chatterbox } = gameState.nightActions;
-    let nightEvents = [];
-
-    if (chatterbox.target && !gameState.chatterboxUsed) {
-        gameState.chatterboxUsed = true;
-        const targetPlayer = players[chatterbox.target];
-        if (targetPlayer) {
-            gameState.revealedRoles[chatterbox.target] = targetPlayer.role;
-            nightEvents.push(`${targetPlayer.name}님의 직업은 [${targetPlayer.role}] 입니다!`);
-        }
-    }
-
-    const finalMafiaTargetAction = mafia.length > 0 ? mafia[0] : null;
-
-    if (finalMafiaTargetAction) {
-        const { target: targetId, executor: executorId } = finalMafiaTargetAction;
-        if (gameState.mafiaAbilityBlocked) {
-            nightEvents.push("미션 성공률이 90% 이상이어서 마피아의 능력이 실패했습니다.");
-        } else if (players[targetId]?.role === '마피아') {
-            nightEvents.push(`마피아는 다른 마피아를 공격할 수 없습니다.`);
-        } else if (police.target === executorId) {
-            nightEvents.push(`경찰이 마피아(${players[executorId].name})를 막아 능력이 실패했습니다.`);
-        } else if (police.target === targetId) {
-            nightEvents.push(`경찰이 마피아의 목표(${players[targetId].name})를 보호하여 암살이 실패했습니다.`);
-        } else {
-            const targetPlayer = players[targetId];
-            if (targetPlayer && targetPlayer.alive) {
-                targetPlayer.alive = false;
-                nightEvents.push(`지난 밤, ${targetPlayer.name}님이 마피아에게 살해당했습니다.`);
-            }
-        }
-    }
-
-    io.emit('nightResult', { events: nightEvents });
-
-    if (checkWinCondition()) return;
-    
-    setTimeout(() => {
-        startVotePhase();
-    }, 4000);
-}
-
 
 function startVotePhase() {
-    gameState.phase = 'vote';
-    Object.values(players).forEach(p => p.votedFor = null);
-    
+    clearInterval(gameState.botQuizInterval);
+    io.emit('voteStart');
+
     Object.values(players).filter(p => p.isBot && p.alive).forEach(bot => {
         setTimeout(() => {
             const alivePlayers = Object.values(players).filter(p => p.alive && p.id !== bot.id);
@@ -205,86 +138,97 @@ function startVotePhase() {
             }
         }, Math.random() * 5000);
     });
-
-    setPhaseTimer(30, processVote);
-    broadcastGameState();
 }
 
+function processRoundResolution() {
+    let resolutionEvents = [];
+    const { mafia, police, chatterbox } = gameState.abilityActions;
 
-function processVote() {
+    // 투표 집계
     const voteCounts = {};
-    const aliveVoters = Object.values(players).filter(p => p.alive);
-
-    aliveVoters.forEach(p => {
-        if(p.votedFor) {
-            voteCounts[p.votedFor] = (voteCounts[p.votedFor] || 0) + 1;
-        }
+    Object.values(players).filter(p => p.alive).forEach(p => {
+        if(p.votedFor) { voteCounts[p.votedFor] = (voteCounts[p.votedFor] || 0) + 1; }
     });
-
-    let maxVotes = 0;
-    let eliminatedId = null;
-    let isTied = false;
-
+    let maxVotes = 0, eliminatedId = null, isTied = false;
     for (const id in voteCounts) {
         if (voteCounts[id] > maxVotes) {
             maxVotes = voteCounts[id];
             eliminatedId = id;
             isTied = false;
-        } else if (voteCounts[id] === maxVotes) {
-            isTied = true;
-        }
+        } else if (voteCounts[id] === maxVotes) { isTied = true; }
     }
-
     if (eliminatedId && !isTied) {
         players[eliminatedId].alive = false;
-        io.emit('voteResult', { message: `투표 결과, ${players[eliminatedId].name}님이 탈락했습니다.` });
+        resolutionEvents.push(`투표 결과, ${players[eliminatedId].name}님이 탈락했습니다.`);
     } else {
-        io.emit('voteResult', { message: "투표가 무효 처리되어 아무도 탈락하지 않았습니다." });
+        resolutionEvents.push("투표가 무효 처리되어 아무도 탈락하지 않았습니다.");
     }
-
     if(checkWinCondition()) return;
 
-    setTimeout(() => {
-        startNewDay();
-    }, 4000);
+    // 능력 처리
+    if (chatterbox && !gameState.chatterboxUsed) {
+        gameState.chatterboxUsed = true;
+        const targetPlayer = players[chatterbox];
+        if (targetPlayer) {
+            gameState.revealedRoles[chatterbox] = targetPlayer.role;
+            resolutionEvents.push(`수다쟁이가 ${targetPlayer.name}님의 정체를 밝혔습니다. 그의 직업은 [${targetPlayer.role}] 입니다!`);
+        }
+    }
+    if (mafia) {
+        if (gameState.missionSuccessRate >= 90) {
+            resolutionEvents.push("미션 성공률이 90% 이상이어서 마피아의 능력이 실패했습니다.");
+        } else if (players[mafia]?.role === '마피아') {
+            resolutionEvents.push(`마피아는 다른 마피아를 공격할 수 없습니다.`);
+        } else if (police === mafia) {
+            resolutionEvents.push(`경찰이 마피아의 목표(${players[mafia].name})를 보호하여 암살이 실패했습니다.`);
+        } else {
+            const targetPlayer = players[mafia];
+            if (targetPlayer && targetPlayer.alive) {
+                targetPlayer.alive = false;
+                resolutionEvents.push(`${targetPlayer.name}님이 처참한 모습으로 발견되었습니다.`);
+            }
+        }
+    }
+    
+    io.emit('roundResult', { events: resolutionEvents });
+    if (checkWinCondition()) return;
+
+    setTimeout(startNewRound, 5000);
 }
 
 function handleBotAbility(botId) {
     const bot = players[botId];
     if (!bot || !bot.alive) return;
-
     const otherAlivePlayers = Object.values(players).filter(p => p.alive && p.id !== botId);
     if (otherAlivePlayers.length === 0) return;
-
     const target = otherAlivePlayers[Math.floor(Math.random() * otherAlivePlayers.length)];
 
     switch (bot.role) {
         case '마피아':
-            if (!gameState.mafiaAbilityBlocked && target.role !== '마피아') {
-                gameState.nightActions.mafia.push({ target: target.id, executor: botId });
+            if (gameState.missionSuccessRate < 90 && target.role !== '마피아') {
+                gameState.abilityActions.mafia = target.id;
             }
             break;
-        case '경찰':
-            gameState.nightActions.police = { target: target.id, executor: botId };
-            break;
+        case '경찰': gameState.abilityActions.police = target.id; break;
         case '수다쟁이':
             if (!gameState.chatterboxUsed && Math.random() < 0.5) { 
-                gameState.nightActions.chatterbox = { target: target.id, executor: botId };
+                gameState.abilityActions.chatterbox = target.id;
             }
             break;
     }
 }
 
 function handleBotQuizCycle() {
-    if (!gameState.isStarted || gameState.phase !== 'day') return;
+    if (!gameState.isStarted) return;
     const pendingMission = gameState.missions.find(m => m.status === 'pending');
-    if (!pendingMission) return; 
+    if (!pendingMission) { clearInterval(gameState.botQuizInterval); return; }
 
     const solvingBot = Object.values(players).find(p => p.isBot && p.alive);
     if (!solvingBot) return;
 
     const isCorrect = Math.random() < 2 / 3; 
     pendingMission.status = isCorrect ? 'success' : 'failure';
+    pendingMission.solver = solvingBot.name;
     console.log(`Bot ${solvingBot.name} solved mission #${pendingMission.id} -> ${pendingMission.status}`);
     broadcastGameState();
 }
@@ -292,48 +236,34 @@ function handleBotQuizCycle() {
 function checkWinCondition() {
     const alivePlayers = Object.values(players).filter(p => p.alive);
     const aliveRoles = alivePlayers.map(p => p.role);
-    
     const mafiaCount = aliveRoles.filter(r => r === '마피아').length;
     const citizenTeamCount = aliveRoles.length - mafiaCount;
-
-    let winner = null;
-    let message = "";
+    let winner = null, message = "";
 
     if (mafiaCount === 0) {
-        winner = '시민';
-        message = "모든 마피아가 제거되어 시민 팀이 승리했습니다!";
+        winner = '시민'; message = "모든 마피아가 제거되어 시민 팀이 승리했습니다!";
     } else if (mafiaCount >= citizenTeamCount) {
-        winner = '마피아';
-        message = "마피아의 수가 시민 팀의 수와 같거나 많아져 마피아 팀이 승리했습니다!";
+        winner = '마피아'; message = "마피아의 수가 시민 팀의 수와 같거나 많아져 마피아 팀이 승리했습니다!";
     }
 
     if (winner) {
         io.emit('gameOver', { winner, message });
-        resetGame();
-        initializeBots();
+        resetGame(); initializeBots();
         return true;
     }
     return false;
 }
 
-function setPhaseTimer(duration, callback) {
-    clearTimeout(gameState.timer);
-    clearInterval(gameState.interval);
-
+function setRoundTimer(duration, callback) {
+    clearTimeout(gameState.timer); clearInterval(gameState.interval);
     let timeLeft = duration;
-    io.emit('timerUpdate', { timeLeft, phase: gameState.phase });
-
+    io.emit('timerUpdate', { timeLeft });
     gameState.interval = setInterval(() => {
-        timeLeft--;
-        io.emit('timerUpdate', { timeLeft, phase: gameState.phase });
-        if (timeLeft <= 0) {
-            clearInterval(gameState.interval);
-        }
+        timeLeft--; io.emit('timerUpdate', { timeLeft });
+        if (timeLeft <= 0) { clearInterval(gameState.interval); }
     }, 1000);
-
     gameState.timer = setTimeout(callback, duration * 1000);
 }
-
 
 function handleVote({voterId, targetId}) {
     const voter = players[voterId];
@@ -342,34 +272,26 @@ function handleVote({voterId, targetId}) {
         const alivePlayers = Object.values(players).filter(p => p.alive);
         const allVoted = alivePlayers.every(p => p.votedFor !== null);
         if (allVoted) {
-            clearTimeout(gameState.timer);
-            clearInterval(gameState.interval);
-            processVote();
+            clearTimeout(gameState.timer); clearInterval(gameState.interval);
+            processRoundResolution();
         }
     }
 }
 
 io.on('connection', (socket) => {
-    const currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
-    socket.emit('lobbyUpdate', currentPlayers);
+    socket.emit('lobbyUpdate', Object.values(players).map(({sock, ...rest}) => rest));
 
     socket.on('login', (name) => {
-        const humanPlayers = Object.values(players).filter(p => !p.isBot);
-        if (humanPlayers.length >= 4) {
+        if (Object.values(players).filter(p => !p.isBot).length >= 4) {
              return socket.emit('loginError', '방이 가득 찼습니다.');
         }
         if (Object.values(players).some(p => p.name === name)) {
             return socket.emit('loginError', '이미 사용 중인 이름입니다.');
         }
-
         players[socket.id] = { id: socket.id, name, isBot: false, alive: true, role: null, socket };
         socket.emit('loginSuccess');
-        
-        const updatedPlayers = Object.values(players).map(({socket, ...rest}) => rest);
-        io.emit('lobbyUpdate', updatedPlayers);
-
+        io.emit('lobbyUpdate', Object.values(players).map(({socket, ...rest}) => rest));
         if (Object.keys(players).length === 7) {
-            console.log(`7 players ready. Starting game in 5 seconds.`);
             io.emit('gameStartingCountdown');
             setTimeout(startGame, 5000);
         }
@@ -378,24 +300,19 @@ io.on('connection', (socket) => {
     socket.on('abilityAction', ({ ability, targetId }) => {
         const player = players[socket.id];
         if (player && player.alive && player.role.toLowerCase() === ability) {
-            if(ability === 'mafia') {
-                gameState.nightActions.mafia = gameState.nightActions.mafia.filter(a => a.executor !== socket.id);
-                gameState.nightActions.mafia.push({ target: targetId, executor: socket.id });
-            } else {
-                gameState.nightActions[ability] = { target: targetId, executor: socket.id };
-            }
+            gameState.abilityActions[ability] = targetId;
         }
     });
     
-    socket.on('submitVote', (targetId) => {
-        handleVote({ voterId: socket.id, targetId });
-    });
+    socket.on('submitVote', (targetId) => handleVote({ voterId: socket.id, targetId }));
     
     socket.on('submitQuiz', ({ missionId, answer }) => {
         const mission = gameState.missions.find(m => m.id === missionId);
-        if (mission && mission.status === 'pending') {
+        const player = players[socket.id];
+        if (mission && mission.status === 'pending' && player) {
             mission.status = (mission.answer === 'any' || mission.answer.toLowerCase() === answer.toLowerCase()) ? 'success' : 'failure';
-            broadcastGameState(); // 퀴즈 풀 때마다 게임 상태 브로드캐스트
+            mission.solver = player.name;
+            broadcastGameState();
         }
     });
 
@@ -404,13 +321,10 @@ io.on('connection', (socket) => {
         if (disconnectedPlayer) {
             console.log(`Player ${disconnectedPlayer.name} disconnected.`);
             if (gameState.isStarted) {
-                io.emit('gameReset');
-                resetGame();
-                initializeBots();
+                io.emit('gameReset'); resetGame(); initializeBots();
             } else {
                 delete players[socket.id];
-                const currentPlayers = Object.values(players).map(({sock, ...rest}) => rest);
-                io.emit('lobbyUpdate', currentPlayers);
+                io.emit('lobbyUpdate', Object.values(players).map(({sock, ...rest}) => rest));
             }
         }
     });
