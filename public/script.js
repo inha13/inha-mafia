@@ -85,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 상황판 UI 그리는 함수 수정
     function updateStatusBoard() {
         statusBoardUl.innerHTML = '';
         gameState.players.forEach(player => {
@@ -137,13 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 능력 탭 업데이트 로직 수정
     function updateAbilityTab() {
         abilityContentDiv.innerHTML = '';
         abilityConfirmBtn.classList.add('hidden');
         selectedTargetId = null;
 
+        if (!myPlayer || !myPlayer.role) return;
+
         const canUseAbility = myPlayer.alive && gameState.phase === 'night';
-        const abilityRole = myPlayer.role ? myPlayer.role.toLowerCase() : '';
+        const abilityRole = myPlayer.role.toLowerCase();
 
         let description = '사용할 수 있는 능력이 없습니다.';
         let targets = [];
@@ -155,7 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         description = '미션 성공률이 높아 능력을 사용할 수 없습니다.';
                     } else {
                         description = '밤에 제거할 대상을 선택하세요.';
-                        targets = gameState.players.filter(p => p.alive && p.role !== '마피아');
+                        // 마피아는 자신을 제외한 모든 생존자를 타겟으로 표시
+                        // 서버에서 같은 마피아를 쏘는 것을 방지
+                        targets = gameState.players.filter(p => p.alive && p.id !== myPlayer.id);
                     }
                     break;
                 case '경찰':

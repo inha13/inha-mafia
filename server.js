@@ -21,13 +21,14 @@ function initializeBots() {
     console.log("Initialized with 3 bots.");
 }
 
+// 퀴즈 30개로 확장
 const ALL_MISSIONS = [
-    { id: 1, question: "화장실 2번째 칸에 수건은 몇 개 있을까요?", type: "number", answer: "5" },
-    { id: 2, question: "뒷 화장실에 휴지는 있을까요?", type: "ox", answer: "O" },
-    { id: 3, question: "인하방에 그리스로마신화는 몇 권 있을까요?", type: "number", answer: "9" },
-    { id: 4, question: "채하방에 콘센트는 몇 개가 꼽혀져 있을까요?", type: "number", answer: "3" },
+    { id: 1, question: "거실에 있는 스피커의 브랜드는 무엇일까요?", type: "choice", options: ["Marshall", "JBL", "Bose"], answer: "Marshall" },
+    { id: 2, question: "현관문 비밀번호에 숫자 0은 포함될까요?", type: "ox", answer: "X" },
+    { id: 3, question: "인하방에 있는 가장 큰 곰인형의 색깔은?", type: "choice", options: ["흰색", "갈색", "분홍색"], answer: "흰색" },
+    { id: 4, question: "부엌에 있는 식탁 의자는 총 몇 개일까요?", type: "number", answer: "4" },
     { id: 5, question: "지금 정수기 상태는 무엇인가요?", type: "choice", options: ["온수", "정수", "냉수"], answer: "any" },
-    { id: 6, question: "우리 집 화투는 어디에 있나요?", type: "choice", options: ["거실", "부모님 침대", "부엌", "화장실", "인하방"], answer: "부모님 침대" },
+    { id: 6, question: "우리 집 화투는 어디에 있나요?", type: "choice", options: ["거실장", "부모님 침대", "신발장"], answer: "부모님 침대" },
     { id: 7, question: "인하방 프린터기 A4용지는 몇 개 있나요?", type: "number", answer: "5" },
     { id: 8, question: "1부터 100까지 모든 수를 더하면 얼마일까요?", type: "number", answer: "5050" },
     { id: 9, question: "정삼각형의 한 내각의 크기는 몇 도일까요?", type: "number", answer: "60" },
@@ -41,7 +42,17 @@ const ALL_MISSIONS = [
     { id: 17, question: "컴퓨터의 중앙처리장치를 무엇이라고 부를까요?", type: "choice", options: ["RAM", "GPU", "CPU"], answer: "CPU" },
     { id: 18, question: "우리나라에서 가장 높은 산은?", type: "choice", options: ["지리산", "설악산", "한라산"], answer: "한라산" },
     { id: 19, question: "세계에서 가장 넓은 나라는 어디일까요?", type: "choice", options: ["중국", "러시아", "캐나다"], answer: "러시아" },
-    { id: 20, question: "물은 섭씨 몇 도에서 끓을까요?", type: "number", answer: "100" }
+    { id: 20, question: "물은 섭씨 몇 도에서 끓을까요?", type: "number", answer: "100" },
+    { id: 21, question: "태양계의 행성 중 가장 큰 것은?", type: "choice", options: ["지구", "목성", "토성"], answer: "목성" },
+    { id: 22, question: "셰익스피어의 4대 비극이 아닌 것은?", type: "choice", options: ["햄릿", "오셀로", "로미오와 줄리엣"], answer: "로미오와 줄리엣" },
+    { id: 23, question: "거북선을 만든 장군의 이름은?", type: "choice", options: ["강감찬", "을지문덕", "이순신"], answer: "이순신" },
+    { id: 24, question: "빛의 3원색에 해당하지 않는 것은?", type: "choice", options: ["빨강", "노랑", "파랑"], answer: "노랑" },
+    { id: 25, question: "미국의 초대 대통령은 누구일까요?", type: "choice", options: ["링컨", "워싱턴", "루스벨트"], answer: "워싱턴" },
+    { id: 26, question: "지구의 자매 행성이라고도 불리는 행성은?", type: "choice", options: ["화성", "수성", "금성"], answer: "금성" },
+    { id: 27, question: "축구 경기에서 한 팀의 선수는 총 몇 명일까요?", type: "number", answer: "11" },
+    { id: 28, question: "모나리자를 그린 화가는?", type: "choice", options: ["반 고흐", "피카소", "레오나르도 다 빈치"], answer: "레오나르도 다 빈치" },
+    { id: 29, question: "세상에서 가장 깊은 바다는?", type: "choice", options: ["태평양", "대서양", "인도양"], answer: "태평양" },
+    { id: 30, question: "1년은 총 몇 주일까요?", type: "number", answer: "52" },
 ];
 
 function resetGame() {
@@ -49,23 +60,10 @@ function resetGame() {
     clearInterval(gameState.interval);
     clearInterval(gameState.botQuizInterval);
     gameState = {
-        isStarted: false,
-        phase: 'ended', 
-        day: 0,
-        timer: null,
-        interval: null,
-        botQuizInterval: null,
-        roles: {},
-        missions: [],
-        missionSuccessRate: 0,
-        mafiaAbilityBlocked: false,
-        nightActions: {
-            mafia: [], 
-            police: { target: null, executor: null },
-            chatterbox: { target: null, executor: null }
-        },
-        revealedRoles: {},
-        chatterboxUsed: false,
+        isStarted: false, phase: 'ended', day: 0, timer: null, interval: null, botQuizInterval: null,
+        roles: {}, missions: [], missionSuccessRate: 0, mafiaAbilityBlocked: false,
+        nightActions: { mafia: [], police: { target: null, executor: null }, chatterbox: { target: null, executor: null } },
+        revealedRoles: {}, chatterboxUsed: false,
     };
     Object.values(players).forEach(p => {
         p.alive = true;
@@ -74,14 +72,23 @@ function resetGame() {
     console.log("--- Game State Reset ---");
 }
 
+function calculateMissionSuccessRate() {
+    if (!gameState.missions || gameState.missions.length === 0) return 0;
+    const totalMissions = gameState.missions.length;
+    const successMissions = gameState.missions.filter(m => m.status === 'success').length;
+    return (successMissions / totalMissions) * 100;
+}
+
 function broadcastGameState() {
+    // 퀴즈 성공률 실시간 계산
+    gameState.missionSuccessRate = calculateMissionSuccessRate();
+    
     const publicGameState = {
-        ...gameState,
-        timer: null,
-        interval: null,
-        botQuizInterval: null,
-        roles: {}, 
+        isStarted: gameState.isStarted, phase: gameState.phase, day: gameState.day, 
         missions: gameState.missions?.map(({ answer, ...rest }) => rest),
+        missionSuccessRate: gameState.missionSuccessRate,
+        mafiaAbilityBlocked: gameState.mafiaAbilityBlocked,
+        revealedRoles: gameState.revealedRoles, chatterboxUsed: gameState.chatterboxUsed,
         players: Object.values(players).map(({ socket, ...rest }) => rest)
     };
     io.emit('gameStateUpdate', publicGameState);
@@ -113,8 +120,8 @@ function startNewDay() {
     gameState.day++;
     gameState.phase = 'day';
     
-    clearInterval(gameState.botQuizInterval); // 이전 인터벌 제거
-    gameState.botQuizInterval = setInterval(handleBotQuizCycle, 10000); // 10초마다 봇 퀴즈 실행
+    clearInterval(gameState.botQuizInterval);
+    gameState.botQuizInterval = setInterval(handleBotQuizCycle, 10000);
 
     const shuffledMissions = ALL_MISSIONS.sort(() => Math.random() - 0.5);
     gameState.missions = shuffledMissions.slice(0, 7).map(m => ({ ...m, status: 'pending' }));
@@ -125,11 +132,8 @@ function startNewDay() {
 
 function startNightPhase() {
     gameState.phase = 'night';
-    clearInterval(gameState.botQuizInterval); // 낮 동안의 봇 퀴즈 인터벌 중지
+    clearInterval(gameState.botQuizInterval); 
     
-    const totalMissions = gameState.missions.length;
-    const successMissions = gameState.missions.filter(m => m.status === 'success').length;
-    gameState.missionSuccessRate = totalMissions > 0 ? (successMissions / totalMissions) * 100 : 0;
     gameState.mafiaAbilityBlocked = gameState.missionSuccessRate >= 90;
     
     gameState.nightActions = { mafia: [], police: {}, chatterbox: {} };
@@ -157,19 +161,20 @@ function processNightActions() {
         }
     }
 
-    const mafiaTargets = mafia.map(action => action.target);
-    const finalMafiaTarget = mafiaTargets.length > 0 ? mafiaTargets[0] : null;
+    const finalMafiaTargetAction = mafia.length > 0 ? mafia[0] : null;
 
-    if (finalMafiaTarget) {
-        const mafiaExecutor = mafia[0].executor;
+    if (finalMafiaTargetAction) {
+        const { target: targetId, executor: executorId } = finalMafiaTargetAction;
         if (gameState.mafiaAbilityBlocked) {
             nightEvents.push("미션 성공률이 90% 이상이어서 마피아의 능력이 실패했습니다.");
-        } else if (police.target === mafiaExecutor) {
-            nightEvents.push(`경찰이 마피아(${players[mafiaExecutor].name})를 막아 능력이 실패했습니다.`);
-        } else if (police.target === finalMafiaTarget) {
-            nightEvents.push(`경찰이 마피아의 목표(${players[finalMafiaTarget].name})를 보호하여 암살이 실패했습니다.`);
+        } else if (players[targetId]?.role === '마피아') {
+            nightEvents.push(`마피아는 다른 마피아를 공격할 수 없습니다.`);
+        } else if (police.target === executorId) {
+            nightEvents.push(`경찰이 마피아(${players[executorId].name})를 막아 능력이 실패했습니다.`);
+        } else if (police.target === targetId) {
+            nightEvents.push(`경찰이 마피아의 목표(${players[targetId].name})를 보호하여 암살이 실패했습니다.`);
         } else {
-            const targetPlayer = players[finalMafiaTarget];
+            const targetPlayer = players[targetId];
             if (targetPlayer && targetPlayer.alive) {
                 targetPlayer.alive = false;
                 nightEvents.push(`지난 밤, ${targetPlayer.name}님이 마피아에게 살해당했습니다.`);
@@ -255,7 +260,7 @@ function handleBotAbility(botId) {
 
     switch (bot.role) {
         case '마피아':
-            if (!gameState.mafiaAbilityBlocked) {
+            if (!gameState.mafiaAbilityBlocked && target.role !== '마피아') {
                 gameState.nightActions.mafia.push({ target: target.id, executor: botId });
             }
             break;
@@ -270,15 +275,13 @@ function handleBotAbility(botId) {
     }
 }
 
-// 10초마다 봇 중 하나가 퀴즈를 푸는 로직
 function handleBotQuizCycle() {
     if (!gameState.isStarted || gameState.phase !== 'day') return;
-
     const pendingMission = gameState.missions.find(m => m.status === 'pending');
-    if (!pendingMission) return; // 풀 미션이 없음
+    if (!pendingMission) return; 
 
     const solvingBot = Object.values(players).find(p => p.isBot && p.alive);
-    if (!solvingBot) return; // 퀴즈를 풀 봇이 없음
+    if (!solvingBot) return;
 
     const isCorrect = Math.random() < 2 / 3; 
     pendingMission.status = isCorrect ? 'success' : 'failure';
@@ -313,7 +316,6 @@ function checkWinCondition() {
     return false;
 }
 
-// 안정적인 타이머 로직으로 수정
 function setPhaseTimer(duration, callback) {
     clearTimeout(gameState.timer);
     clearInterval(gameState.interval);
@@ -393,7 +395,7 @@ io.on('connection', (socket) => {
         const mission = gameState.missions.find(m => m.id === missionId);
         if (mission && mission.status === 'pending') {
             mission.status = (mission.answer === 'any' || mission.answer.toLowerCase() === answer.toLowerCase()) ? 'success' : 'failure';
-            broadcastGameState();
+            broadcastGameState(); // 퀴즈 풀 때마다 게임 상태 브로드캐스트
         }
     });
 

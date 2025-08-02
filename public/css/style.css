@@ -1,13 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 
 :root {
-    --primary-color: #ffffff;
-    --secondary-color: #bdc3c7;
-    --background-color: #2c2937;
-    --surface-color: #3e3a4e;
-    --accent-color: #9b59b6;
+    --primary-color: #f0e6f6;
+    --secondary-color: #b3a5c0;
+    --background-color: #231e2c;
+    --surface-color: #312a40;
+    --accent-color: #6A0DAD; /* 진한 보라색 */
     --danger-color: #e74c3c;
     --success-color: #2ecc71;
+    --hover-color: #8338ec;
 }
 
 body {
@@ -61,7 +62,7 @@ h1, h2, h3 {
     font-weight: 500;
     text-align: center;
 }
-h1 { color: var(--accent-color); }
+h1 { color: var(--accent-color); text-shadow: 0 0 5px var(--hover-color); }
 
 p {
     color: var(--secondary-color);
@@ -77,7 +78,7 @@ input[type="text"] {
     width: 80%;
     padding: 12px 15px;
     margin-bottom: 20px;
-    border: 1px solid #5e5a6e;
+    border: 1px solid #554c69;
     border-radius: 8px;
     background-color: var(--background-color);
     color: var(--primary-color);
@@ -102,9 +103,9 @@ button {
     transition: background-color 0.3s, transform 0.2s;
 }
 
-button:hover { background-color: #8e44ad; }
+button:hover { background-color: var(--hover-color); }
 button:active { transform: scale(0.98); }
-button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
+button:disabled { background-color: #554c69; cursor: not-allowed; }
 
 #player-list {
     list-style: none;
@@ -136,7 +137,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
     justify-content: space-between;
     align-items: center;
     padding-bottom: 15px;
-    border-bottom: 1px solid #5e5a6e;
+    border-bottom: 1px solid #554c69;
     margin-bottom: 15px;
 }
 
@@ -155,7 +156,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
     padding: 15px;
     background-color: transparent;
     border: none;
-    border-bottom: 2px solid #5e5a6e;
+    border-bottom: 2px solid #554c69;
     color: var(--secondary-color);
     font-size: 16px;
     cursor: pointer;
@@ -198,6 +199,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
     margin-right: 15px;
     width: 30px;
     text-align: center;
+    color: var(--hover-color);
 }
 
 .status-item .player-name {
@@ -216,7 +218,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
 }
 
 .status-item.dead::after {
-    content: 'DECEASED';
+    content: '탈락';
     position: absolute;
     top: 50%;
     left: 50%;
@@ -247,7 +249,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
 }
 
 .target-btn {
-    background-color: #5e5a6e;
+    background-color: #554c69;
 }
 .target-btn.selected {
     background-color: var(--danger-color);
@@ -270,8 +272,8 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
     transition: background-color 0.3s;
 }
 
-.mission-item:hover { background-color: #5e5a6e; }
-.mission-item.disabled { cursor: not-allowed; background-color: #2c2937; color: #6a6a6a; }
+.mission-item:hover { background-color: #554c69; }
+.mission-item.disabled { cursor: not-allowed; background-color: #231e2c; color: #6a6a6a; }
 .mission-status { font-weight: bold; }
 .mission-status.success { color: var(--success-color); }
 .mission-status.failure { color: var(--danger-color); }
@@ -285,7 +287,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.8);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -311,7 +313,7 @@ button:disabled { background-color: #5e5a6e; cursor: not-allowed; }
 
 #role-name { color: var(--accent-color); font-size: 28px; }
 #quiz-options { margin: 15px 0; }
-.quiz-option-btn { display: block; width: 100%; margin: 8px 0; background-color: #5e5a6e; }
+.quiz-option-btn { display: block; width: 100%; margin: 8px 0; background-color: #554c69; }
 #vote-options { margin: 20px 0; }
-.vote-option-btn { display: block; width: 100%; margin: 8px 0; background-color: #5e5a6e; }
+.vote-option-btn { display: block; width: 100%; margin: 8px 0; background-color: #554c69; }
 .vote-option-btn.selected { background-color: var(--accent-color); }
